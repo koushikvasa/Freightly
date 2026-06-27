@@ -44,6 +44,47 @@ function extractRecommendation(text: string): Recommendation {
   }
 }
 
+// Deterministic recommender used when the agent is unavailable. Applies the
+// same rules the agent is told to follow: never pick a closed drop-off, default
+// to cheapest, but pay a small premium (~15%) for clearly higher reliability.
+function fallbackRecommendation(full: RatesResult): Recommendation {
+  const options = full.options;
+  if (options.length === 0)
+    return { carrier: "—", service: "—", price: 0, why: "No rates available." };
+
+  const openish = options.filter((o) => o.dropoffStatus !== "closed");
+  const pool = openish.length ? openish : options;
+  const cheapest = pool[0]; // options arrive sorted by price asc
+  const mostReliable = [...pool].sort((a, b) => b.reliability - a.reliability)[0];
+
+  let pick = cheapest;
+  let why: string;
+
+  if (
+    mostReliable !== cheapest &&
+    mostReliable.reliability - cheapest.reliability >= 0.5 &&
+    mostReliable.price <= cheapest.price * 1.15
+  ) {
+    pick = mostReliable;
+    const delta = (pick.price - cheapest.price).toFixed(2);
+    why = `Only $${delta} more than the cheapest, but noticeably more reliable at ${pick.reliability}/10 (${pick.onTimePct}% on-time)${
+      pick.etaDays != null ? `, delivering in ~${pick.etaDays} days` : ""
+    } — worth the small premium.`;
+  } else {
+    why = `Cheapest option that actually ships: $${pick.price.toFixed(2)}${
+      pick.etaDays != null ? `, ~${pick.etaDays}-day delivery` : ""
+    }, ${pick.onTimePct}% on-time (${pick.reliability}/10 reliability).`;
+  }
+
+  if (pick.dropoffStatus === "closing_soon" && pick.pickupType === "scheduled") {
+    why += ` Its drop-off is closing soon, but it offers scheduled pickup${
+      pick.pickupCost ? ` (+$${pick.pickupCost})` : ""
+    }.`;
+  }
+
+  return { carrier: pick.carrier, service: pick.service, price: pick.price, why };
+}
+
 export async function POST(req: Request) {
   try {
     const shipment = await req.json();
@@ -84,18 +125,7 @@ export async function POST(req: Request) {
     const full: RatesResult = captured ?? (await getRates(shipment));
 
     if (!recommendation) {
-      const pick =
-        full.options.find((o) => o.dropoffStatus !== "closed") ?? full.options[0];
-      recommendation = pick
-        ? {
-            carrier: pick.carrier,
-            service: pick.service,
-            price: pick.price,
-            why: `Cheapest available option at $${pick.price.toFixed(2)}, ${
-              pick.etaDays ?? "n/a"
-            }-day delivery, ${pick.onTimePct}% on-time. (Automatic pick — AI recommendation unavailable.)`,
-          }
-        : { carrier: "—", service: "—", price: 0, why: "No rates available." };
+      recommendation = fallbackRecommendation(full);
     }
 
     const { error } = await supabase.from("quotes").insert({
