@@ -80,8 +80,6 @@ export default function Home() {
   const [height, setHeight] = useState("50");
   const [weight, setWeight] = useState("3.0");
   const [category, setCategory] = useState("General");
-  const [lat, setLat] = useState("40.7220");
-  const [lng, setLng] = useState("-73.9626");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,8 +114,6 @@ export default function Home() {
     const L = parseFloat(length) || 0;
     const W = parseFloat(width) || 0;
     const H = parseFloat(height) || 0;
-    const oLat = lat ? parseFloat(lat) : undefined;
-    const oLng = lng ? parseFloat(lng) : undefined;
 
     const shipment = {
       originStreet: o.street,
@@ -133,8 +129,6 @@ export default function Home() {
       widthCm: W,
       heightCm: H,
       category: category.toLowerCase(),
-      originLat: oLat,
-      originLng: oLng,
     };
 
     try {
@@ -152,7 +146,7 @@ export default function Home() {
       setResult({
         options: data.options,
         recommendation: data.recommendation,
-        origin: oLat != null && oLng != null ? { lat: oLat, lng: oLng } : undefined,
+        origin: data.origin ?? undefined,
         routeLabel: `${o.zip || o.city} → ${d.zip || d.city}`,
         originState: o.state,
         destState: d.state,
@@ -283,14 +277,18 @@ export default function Home() {
   return (
     <>
       <header className="bar">
-        <div className="brand">
-          <div className="mark" aria-hidden="true" />
-          <h1>Freightly</h1>
-        </div>
-        <div className="tag">
-          rates, ranked.
-          <br />
-          the cheapest box that actually ships.
+        <div className="bar-inner">
+          <div className="brand">
+            <div className="mark" aria-hidden="true" />
+            <div className="wordmark">
+              <h1>Freightly</h1>
+              <span className="kicker">multi-carrier · decided</span>
+            </div>
+          </div>
+          <div className="tag">
+            <span className="tag-strong">rates, ranked.</span>
+            <span className="tag-sub">the cheapest box that actually ships.</span>
+          </div>
         </div>
       </header>
 
@@ -327,17 +325,6 @@ export default function Home() {
                 <option>High-value</option>
                 <option>Oversized</option>
               </select>
-            </div>
-          </div>
-
-          <div className="row two" style={{ marginTop: 14 }}>
-            <div className="field">
-              <label>Origin latitude (optional · for drop-off map)</label>
-              <input value={lat} onChange={(e) => setLat(e.target.value)} aria-label="origin lat" />
-            </div>
-            <div className="field">
-              <label>Origin longitude (optional)</label>
-              <input value={lng} onChange={(e) => setLng(e.target.value)} aria-label="origin lng" />
             </div>
           </div>
 

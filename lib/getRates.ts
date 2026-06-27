@@ -3,7 +3,7 @@ import { CARRIER_META, DEFAULT_META } from "./carrierMeta";
 import type { Shipment, RateOption, RatesResult } from "./types";
 
 // Straight-line distance between two lat/lng points, in km.
-function haversineKm(a: number, b: number, c: number, d: number) {
+export function haversineKm(a: number, b: number, c: number, d: number) {
   const R = 6371,
     r = (x: number) => (x * Math.PI) / 180;
   const dLat = r(c - a),

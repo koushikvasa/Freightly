@@ -1,6 +1,7 @@
 import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
-import { getRates } from "@/lib/getRates";
+import { getRates, haversineKm } from "@/lib/getRates";
+import { geocode } from "@/lib/geocode";
 import { supabase } from "@/lib/supabase";
 import type { RatesResult, Recommendation } from "@/lib/types";
 
@@ -89,6 +90,19 @@ export async function POST(req: Request) {
   try {
     const shipment = await req.json();
 
+    // Geocode the origin address (free, no key) so the map + drop-off distance
+    // work without the user typing lat/lng. Best-effort.
+    if (shipment.originLat == null || shipment.originLng == null) {
+      const q = [shipment.originStreet, shipment.originCity, shipment.originState, shipment.originZip]
+        .filter(Boolean)
+        .join(", ");
+      const geo = await geocode(q);
+      if (geo) {
+        shipment.originLat = geo.lat;
+        shipment.originLng = geo.lng;
+      }
+    }
+
     // Capture the tool's result so we don't re-run getRates (and re-hit Shippo)
     // just to persist the options.
     let captured: RatesResult | null = null;
@@ -125,6 +139,21 @@ export async function POST(req: Request) {
 
     const full: RatesResult = captured ?? (await getRates(shipment));
 
+    // Recompute drop-off distances from the (geocoded) origin so they're correct
+    // regardless of whether the agent forwarded the coordinates to the tool.
+    if (shipment.originLat != null && shipment.originLng != null) {
+      for (const o of full.options) {
+        if (o.dropoffLat != null && o.dropoffLng != null) {
+          o.nearestDropoffKm = haversineKm(
+            shipment.originLat,
+            shipment.originLng,
+            o.dropoffLat,
+            o.dropoffLng
+          );
+        }
+      }
+    }
+
     if (!recommendation) {
       recommendation = fallbackRecommendation(full);
     }
@@ -142,7 +171,12 @@ export async function POST(req: Request) {
     });
     if (error) console.error("Supabase insert failed:", error);
 
-    return Response.json({ options: full.options, recommendation });
+    const origin =
+      shipment.originLat != null && shipment.originLng != null
+        ? { lat: shipment.originLat, lng: shipment.originLng }
+        : null;
+
+    return Response.json({ options: full.options, recommendation, origin });
   } catch (err) {
     console.error("/api/rates failed:", err);
     return Response.json(
