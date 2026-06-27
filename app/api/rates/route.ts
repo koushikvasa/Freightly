@@ -107,9 +107,10 @@ export async function POST(req: Request) {
     let recommendation: Recommendation | null = null;
     try {
       const { text } = await generateText({
-        // Resolved via the Vercel AI Gateway (AI_GATEWAY_API_KEY). If the gateway
-        // rejects this slug, try "anthropic/claude-sonnet-4-6".
-        model: "anthropic/claude-sonnet-4.6",
+        // Resolved via the Vercel AI Gateway (AI_GATEWAY_API_KEY). Haiku 4.5 is
+        // available on the free tier; Sonnet/Opus need paid credits. Override
+        // with FREIGHTLY_MODEL once you've topped up (e.g. anthropic/claude-sonnet-4.6).
+        model: process.env.FREIGHTLY_MODEL ?? "anthropic/claude-haiku-4.5",
         system: SYSTEM,
         prompt: `Shipment: ${JSON.stringify(shipment)}`,
         tools: { getRates: ratesTool },
